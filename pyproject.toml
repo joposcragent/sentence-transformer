@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "st-service"
+version = "1.0.0"
+description = "REST API for BGE-M3 text embeddings (sentence-transformers)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sentence-transformers>=3.0.0",
+    "torch>=2.2.0",
+    "scikit-learn>=1.4.0",
+    "pydantic-settings>=2.6.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+st-service = "st_service.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["st_service"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
