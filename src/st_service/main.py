@@ -6,6 +6,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 import numpy as np
 
+from st_service import __version__
 from st_service.config import get_settings, resolve_torch_device
 from st_service.cosine import cosine_similarity_01
 from st_service.embedding import encode_text, load_model, max_context_tokens, token_length
@@ -29,7 +30,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Job posting scraping agent - sentence transformer",
-    version="1.0.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
