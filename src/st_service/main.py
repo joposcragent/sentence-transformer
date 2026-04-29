@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
+import numpy as np
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
-import numpy as np
 
 from st_service import __version__
 from st_service.config import get_settings, resolve_torch_device
 from st_service.cosine import cosine_similarity_01
 from st_service.embedding import encode_text, load_model, max_context_tokens, token_length
+from st_service.log_preview import preview_text, preview_vector
 from st_service.schemas import CosineSimilarityResponse, TextCorpus, VectorsPair
+
+logger = logging.getLogger(__name__)
 
 API_PREFIX = "/sentence-transformer"
 
@@ -20,10 +24,26 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     device = resolve_torch_device(settings.st_device)
     cache = str(settings.st_model_cache_dir) if settings.st_model_cache_dir else None
-    app.state.model = load_model(
+    logger.info(
+        "Loading sentence-transformer model name=%s device=%s cache_folder=%s",
         settings.st_model_name,
-        device=device,
-        cache_folder=cache,
+        device,
+        cache or "(default)",
+    )
+    try:
+        app.state.model = load_model(
+            settings.st_model_name,
+            device=device,
+            cache_folder=cache,
+        )
+    except Exception:
+        logger.exception("Failed to load sentence-transformer model")
+        raise
+    logger.info(
+        "Model ready name=%s device=%s cache_folder=%s",
+        settings.st_model_name,
+        device,
+        cache or "(default)",
     )
     yield
 
@@ -43,6 +63,7 @@ def health(request: Request):
         _ = request.app.state.model
         return {"status": "READY"}
     except Exception as exc:
+        logger.warning("Health check failed: %s", exc)
         return PlainTextResponse(str(exc), status_code=503)
 
 
@@ -52,13 +73,32 @@ def vectorize(request: Request, body: TextCorpus):
     try:
         n = token_length(model, body.text)
         limit = max_context_tokens(model)
+        logger.info(
+            "Vectorize start text_len=%s token_count=%s token_limit=%s text_preview=%r",
+            len(body.text),
+            n,
+            limit,
+            preview_text(body.text),
+        )
         if n > limit:
+            logger.warning(
+                "Vectorize rejected 413 token_count=%s token_limit=%s text_preview=%r",
+                n,
+                limit,
+                preview_text(body.text),
+            )
             raise HTTPException(status_code=413)
         vec = encode_text(model, body.text)
+        logger.info(
+            "Vectorize success dim=%s vector_preview=%r",
+            vec.size,
+            preview_vector(vec),
+        )
         return vec.tolist()
     except HTTPException:
         raise
     except Exception as exc:
+        logger.exception("Vectorize failed")
         return PlainTextResponse(str(exc), status_code=500)
 
 
@@ -67,9 +107,18 @@ def cosine_similarity_endpoint(body: VectorsPair):
     try:
         left = np.asarray(body.left, dtype=np.float64)
         right = np.asarray(body.right, dtype=np.float64)
+        logger.info(
+            "Cosine similarity start left_len=%s right_len=%s left_preview=%r right_preview=%r",
+            left.size,
+            right.size,
+            preview_vector(left),
+            preview_vector(right),
+        )
         sim = cosine_similarity_01(left, right)
+        logger.info("Cosine similarity success similarity=%s", sim)
         return CosineSimilarityResponse(similarity=sim)
     except Exception as exc:
+        logger.exception("Cosine similarity failed")
         return PlainTextResponse(str(exc), status_code=500)
 
 
