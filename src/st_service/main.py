@@ -19,6 +19,29 @@ logger = logging.getLogger(__name__)
 API_PREFIX = "/sentence-transformer"
 
 
+class _SuppressHealthAccessLogFilter(logging.Filter):
+    """Drop uvicorn access lines for GET <API_PREFIX>/health (path may include query)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if not isinstance(args, tuple) or len(args) < 3:
+            return True
+        method, raw_path = args[1], args[2]
+        if method != "GET":
+            return True
+        path_only = str(raw_path).split("?", 1)[0]
+        if path_only == f"{API_PREFIX}/health":
+            return False
+        return True
+
+
+def _install_uvicorn_access_log_filter() -> None:
+    access_logger = logging.getLogger("uvicorn.access")
+    if any(isinstance(f, _SuppressHealthAccessLogFilter) for f in access_logger.filters):
+        return
+    access_logger.addFilter(_SuppressHealthAccessLogFilter())
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -123,3 +146,5 @@ def cosine_similarity_endpoint(body: VectorsPair):
 
 
 app.include_router(router)
+
+_install_uvicorn_access_log_filter()

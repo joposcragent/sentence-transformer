@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "st-service"
-version = "1.0.1"
+version = "1.0.2"
 description = "REST API for BGE-M3 text embeddings (sentence-transformers)"
 readme = "README.md"
 requires-python = ">=3.11"
